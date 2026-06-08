@@ -56,3 +56,15 @@ def export_csv(findings: List[Dict[str, Any]], output_path: str) -> None:
         writer = csv.DictWriter(fh, fieldnames=fieldnames, extrasaction="ignore")
         writer.writeheader()
         writer.writerows(findings)
+
+
+def print_json_report(findings: List[Dict[str, Any]]) -> None:
+    """
+    Print *findings* as a formatted JSON string to stdout.
+
+    Parameters
+    ----------
+    findings : list[dict]
+        List of finding dicts as returned by ``scan_path``.
+    """
+    print(json.dumps(findings, indent=2, ensure_ascii=False))

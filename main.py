@@ -23,7 +23,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
 from colorama import Fore, Style, init as colorama_init
 
 from scanner.file_scanner import scan_path
-from scanner.reporter import export_json, export_csv
+from scanner.reporter import export_json, export_csv, print_json_report
 
 # ── Colour helpers ─────────────────────────────────────────────────────────
 SEVERITY_COLOR = {
@@ -70,6 +70,12 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="FORMAT",
         help="Export format: 'json' or 'csv'. Saves to output/ directory.",
+    )
+    parser.add_argument(
+        "--format",
+        choices=["text", "json"],
+        default="text",
+        help="Console output format: 'text' (default) or 'json' (silent mode).",
     )
     parser.add_argument(
         "--verbose",
@@ -146,25 +152,35 @@ def _count_files(path: str) -> int:
 
 def main() -> int:
     colorama_init(autoreset=True)
-    _banner()
 
     parser = _build_parser()
     args = parser.parse_args()
 
+    is_json_format = getattr(args, "format", "text") == "json"
+
+    if not is_json_format:
+        _banner()
+
     target = Path(args.path)
     if not target.exists():
-        print(_colored(f"  ERROR: Path not found: {args.path}", Fore.RED + Style.BRIGHT))
+        if not is_json_format:
+            print(_colored(f"  ERROR: Path not found: {args.path}", Fore.RED + Style.BRIGHT))
+        else:
+            print(f'{{"error": "Path not found: {args.path}"}}')
         return 1
 
-    print(_colored(f"  Scanning: {target.resolve()}", Fore.CYAN))
-    if args.verbose:
-        print()
+    if not is_json_format:
+        print(_colored(f"  Scanning: {target.resolve()}", Fore.CYAN))
+        if args.verbose:
+            print()
 
-    findings = scan_path(str(target), verbose=args.verbose)
+    # Pass verbose=False if json format to prevent prints from the scanner
+    findings = scan_path(str(target), verbose=args.verbose if not is_json_format else False)
 
     total_files = _count_files(str(target))
 
-    _print_findings(findings)
+    if not is_json_format:
+        _print_findings(findings)
 
     report_path: str | None = None
     if args.output and findings:
@@ -176,7 +192,10 @@ def main() -> int:
             report_path = os.path.join("output", "report.csv")
             export_csv(findings, report_path)
 
-    _print_summary(total_files, findings, report_path)
+    if is_json_format:
+        print_json_report(findings)
+    else:
+        _print_summary(total_files, findings, report_path)
 
     # Exit code 1 when secrets found (useful for CI pipelines)
     return 1 if findings else 0
